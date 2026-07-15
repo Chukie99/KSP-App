@@ -1,14 +1,51 @@
 {
   "name": "koperasi-simpan-pinjam",
   "version": "1.0.0",
-  "description": "Aplikasi Koperasi Simpan Pinjam",
+  "description": "Aplikasi Desktop Koperasi Simpan Pinjam",
   "main": "dist-electron/main/index.js",
-  "author": "KSP App",
+  "author": "Chukie99",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:win": "vite build && electron-builder --win dir --config.win.sign=null",
+    "build:portable": "vite build && electron-builder --win portable --config.win.sign=null",
     "start": "vite --port 5173"
+  },
+  "build": {
+    "appId": "com.ksp.simpinjam",
+    "productName": "KSP Simpan Pinjam",
+    "directories": {
+      "output": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": null,
+      "sign": null
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "KSP Simpan Pinjam"
+    },
+    "extraResources": [
+      {
+        "from": "data",
+        "to": "data",
+        "filter": ["**/*"]
+      }
+    ]
   },
   "dependencies": {
     "sql.js": "^1.10.0",
