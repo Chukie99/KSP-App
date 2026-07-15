@@ -11,10 +11,15 @@ export default function Login() {
     e.preventDefault()
     if (!username || !password) return setError('Masukkan username dan password')
     setLoading(true); setError('')
-    const result = await window.api.auth.login(username, password)
-    setLoading(false)
-    if (result.error) return setError(result.error)
-    setAuth(result.user, result.anggota)
+    try {
+      const result = await window.api.auth.login(username, password)
+      setLoading(false)
+      if (result.error) return setError(result.error)
+      setAuth(result.user, result.anggota)
+    } catch (err: any) {
+      setLoading(false)
+      setError('Gagal menghubungi server: ' + (err.message || 'Periksa koneksi'))
+    }
   }
   return (
     <div className="flex-1 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, rgba(0,120,212,0.03), rgba(0,120,212,0.08))' }}>

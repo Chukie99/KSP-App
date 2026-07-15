@@ -20,7 +20,10 @@
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "node_modules/sql.js/**/*",
+      "node_modules/bcryptjs/**/*",
+      "node_modules/**/*"
     ],
     "win": {
       "target": [

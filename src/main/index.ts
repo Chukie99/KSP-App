@@ -215,13 +215,20 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  await initDatabase()
-  checkOverdueLoans()
-  startMacetScheduler()
-  createWindow()
+  try {
+    await initDatabase()
+    checkOverdueLoans()
+    startMacetScheduler()
+    createWindow()
+  } catch (err) {
+    console.error('App init error:', err)
+    dialog.showErrorBox('Startup Error', 'Gagal inialisasi aplikasi: ' + (err as Error).message)
+    app.quit()
+  }
 })
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
+process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err))
 
 // Window controls
 ipcMain.on('window:minimize', () => mainWindow?.minimize())
@@ -230,14 +237,20 @@ ipcMain.on('window:close', () => mainWindow?.close())
 
 // Auth
 ipcMain.handle('auth:login', (_e, username: string, password: string) => {
-  const user = queryOne('SELECT * FROM users WHERE username = ? AND is_active = 1', [username])
-  if (!user) return { error: 'User tidak ditemukan' }
-  if (!bcrypt.compareSync(password, user.password)) return { error: 'Password salah' }
-  currentUserId = user.id
-  currentUserRole = user.role
-  let anggota: any = null
-  if (user.role === 'anggota') anggota = queryOne('SELECT * FROM anggota WHERE user_id = ?', [user.id])
-  return { user: { id: user.id, username: user.username, role: user.role, nama_lengkap: user.nama_lengkap }, anggota }
+  try {
+    if (!db) return { error: 'Database belum siap' }
+    const user = queryOne('SELECT * FROM users WHERE username = ? AND is_active = 1', [username])
+    if (!user) return { error: 'User tidak ditemukan' }
+    if (!bcrypt.compareSync(password, user.password)) return { error: 'Password salah' }
+    currentUserId = user.id
+    currentUserRole = user.role
+    let anggota: any = null
+    if (user.role === 'anggota') anggota = queryOne('SELECT * FROM anggota WHERE user_id = ?', [user.id])
+    return { user: { id: user.id, username: user.username, role: user.role, nama_lengkap: user.nama_lengkap }, anggota }
+  } catch (err: any) {
+    console.error('Login error:', err)
+    return { error: 'Gagal login: ' + err.message }
+  }
 })
 
 ipcMain.handle('auth:logout', () => { currentUserId = null; currentUserRole = null; return { success: true } })
