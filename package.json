@@ -45,6 +45,12 @@
         "to": "data",
         "filter": ["**/*"]
       }
+    ],
+    "extraFiles": [
+      {
+        "from": "dist-electron/main/sql-wasm.wasm",
+        "to": "sql-wasm.wasm"
+      }
     ]
   },
   "dependencies": {

@@ -18,11 +18,36 @@ let currentUserRole: string | null = null
 function isAdmin(): boolean { return currentUserRole === 'admin' }
 function isTellerOrAdmin(): boolean { return currentUserRole === 'admin' || currentUserRole === 'teller' }
 
+function getWasmPath(): string {
+  if (isDev) return path.join(__dirname, 'sql-wasm.wasm')
+  const exeDir = path.dirname(app.getPath('exe'))
+  const candidates = [
+    path.join(exeDir, 'sql-wasm.wasm'),
+    path.join(process.resourcesPath, 'sql-wasm.wasm'),
+    path.join(__dirname, 'sql-wasm.wasm'),
+  ]
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p
+  }
+  return path.join(exeDir, 'sql-wasm.wasm')
+}
+
+function getDbPath(): string {
+  if (isDev) return path.join(__dirname, '../../data/koperasi.db')
+  const appData = app.getPath('userData')
+  return path.join(appData, 'koperasi.db')
+}
+
 async function initDatabase() {
-  const sqlWasmPath = path.join(__dirname, 'sql-wasm.wasm')
+  const sqlWasmPath = getWasmPath()
+  console.log('Loading sql.js from:', sqlWasmPath)
+  console.log('Database path:', getDbPath())
   const SQL = await initSqlJs({ locateFile: () => sqlWasmPath })
-  if (fs.existsSync(dbPath)) {
-    db = new SQL.Database(fs.readFileSync(dbPath))
+  const finalDbPath = getDbPath()
+  const finalDbDir = path.dirname(finalDbPath)
+  if (!fs.existsSync(finalDbDir)) fs.mkdirSync(finalDbDir, { recursive: true })
+  if (fs.existsSync(finalDbPath)) {
+    db = new SQL.Database(fs.readFileSync(finalDbPath))
   } else {
     db = new SQL.Database()
   }
@@ -112,7 +137,10 @@ async function initDatabase() {
 
 function saveDb() {
   const data = db.export()
-  fs.writeFileSync(dbPath, Buffer.from(data))
+  const finalDbPath = getDbPath()
+  const finalDbDir = path.dirname(finalDbPath)
+  if (!fs.existsSync(finalDbDir)) fs.mkdirSync(finalDbDir, { recursive: true })
+  fs.writeFileSync(finalDbPath, Buffer.from(data))
 }
 
 function queryAll(sql: string, params: any[] = []): any[] {
@@ -423,18 +451,20 @@ ipcMain.handle('laporan:per-anggota', (_e, anggotaId: number) => {
 
 // Backup & Restore
 ipcMain.handle('backup:database', async () => {
+  const currentDbPath = getDbPath()
   const result = await dialog.showSaveDialog(mainWindow!, {
     defaultPath: `koperasi-backup-${new Date().toISOString().split('T')[0]}.db`,
     filters: [{ name: 'SQLite Database', extensions: ['db'] }]
   })
   if (!result.canceled && result.filePath) {
-    fs.copyFileSync(dbPath, result.filePath)
+    fs.copyFileSync(currentDbPath, result.filePath)
     return { success: true, path: result.filePath }
   }
   return { canceled: true }
 })
 
 ipcMain.handle('restore:database', async () => {
+  const currentDbPath = getDbPath()
   const result = await dialog.showOpenDialog(mainWindow!, {
     filters: [{ name: 'SQLite Database', extensions: ['db'] }],
     properties: ['openFile']
@@ -442,14 +472,14 @@ ipcMain.handle('restore:database', async () => {
   if (!result.canceled && result.filePaths.length > 0) {
     try {
       const backupPath = result.filePaths[0]
-      const testDb = new (await initSqlJs()).Database(fs.readFileSync(backupPath))
+      const SQL = await initSqlJs({ locateFile: () => getWasmPath() })
+      const testDb = new SQL.Database(fs.readFileSync(backupPath))
       testDb.close()
-      const currentDbPath = dbPath + '.backup'
-      fs.copyFileSync(dbPath, currentDbPath)
-      fs.copyFileSync(backupPath, dbPath)
+      const backupDbPath = currentDbPath + '.backup'
+      fs.copyFileSync(currentDbPath, backupDbPath)
+      fs.copyFileSync(backupPath, currentDbPath)
       db.close()
-      const SQL = await initSqlJs({ locateFile: () => path.join(__dirname, 'sql-wasm.wasm') })
-      db = new SQL.Database(fs.readFileSync(dbPath))
+      db = new SQL.Database(fs.readFileSync(currentDbPath))
       return { success: true }
     } catch (err: any) {
       return { error: 'File database tidak valid: ' + err.message }
