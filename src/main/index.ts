@@ -199,7 +199,7 @@ function createWindow() {
     width: 1400, height: 900, minWidth: 1100, minHeight: 700,
     frame: false, titleBarStyle: 'hidden',
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true, nodeIntegration: false,
     },
     backgroundColor: '#f3f3f3', show: false,
