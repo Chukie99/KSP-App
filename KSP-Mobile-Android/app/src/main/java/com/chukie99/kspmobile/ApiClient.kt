@@ -8,9 +8,9 @@ import org.json.JSONObject
 import java.io.IOException
 
 object ApiClient {
-    // Ganti dengan URL dan Key Supabase kamu
-    const val SUPABASE_URL = "https://your-project.supabase.co"
-    const val SUPABASE_KEY = "your-anon-key"
+    // Supabase config (di-set dari login screen)
+    var SUPABASE_URL = ""
+    var SUPABASE_KEY = ""
 
     private val client = OkHttpClient()
 

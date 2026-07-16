@@ -34,19 +34,34 @@
         android:text="Masuk ke akun Anda"
         android:textSize="14sp"
         android:textColor="#616161"
-        android:layout_marginBottom="32dp" />
+        android:layout_marginBottom="24dp" />
 
     <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        android:hint="Username">
+        android:layout_marginBottom="12dp"
+        android:hint="Link Supabase">
 
         <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/etUsername"
+            android:id="@+id/etLink"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="text" />
+            android:inputType="textUri"
+            android:textSize="13sp" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        android:hint="NIK">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etNik"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:maxLength="16" />
     </com.google.android.material.textfield.TextInputLayout>
 
     <com.google.android.material.textfield.TextInputLayout
@@ -78,5 +93,13 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:visibility="gone" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Password default: ksp123"
+        android:textSize="11sp"
+        android:textColor="#9E9E9E"
+        android:layout_marginTop="16dp" />
 
 </LinearLayout>

@@ -1,5 +1,6 @@
 package com.chukie99.kspmobile
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
@@ -8,11 +9,11 @@ import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import org.json.JSONArray
-import org.json.JSONObject
 
 class LoginActivity : AppCompatActivity() {
 
-    private lateinit var etUsername: EditText
+    private lateinit var etLink: EditText
+    private lateinit var etNik: EditText
     private lateinit var etPassword: EditText
     private lateinit var btnLogin: Button
     private lateinit var progressBar: ProgressBar
@@ -21,29 +22,45 @@ class LoginActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
 
-        etUsername = findViewById(R.id.etUsername)
+        etLink = findViewById(R.id.etLink)
+        etNik = findViewById(R.id.etNik)
         etPassword = findViewById(R.id.etPassword)
         btnLogin = findViewById(R.id.btnLogin)
         progressBar = findViewById(R.id.progressBar)
 
+        // Load saved link
+        val prefs = getSharedPreferences("ksp", Context.MODE_PRIVATE)
+        etLink.setText(prefs.getString("supabase_link", ""))
+
         btnLogin.setOnClickListener {
-            val username = etUsername.text.toString().trim()
+            val link = etLink.text.toString().trim()
+            val nik = etNik.text.toString().trim()
             val password = etPassword.text.toString().trim()
 
-            if (username.isEmpty() || password.isEmpty()) {
-                Toast.makeText(this, "Masukkan username dan password", Toast.LENGTH_SHORT).show()
+            if (link.isEmpty() || nik.isEmpty() || password.isEmpty()) {
+                Toast.makeText(this, "Isi semua field", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            login(username, password)
+            login(link, nik, password)
         }
     }
 
-    private fun login(username: String, password: String) {
+    private fun login(link: String, nik: String, password: String) {
         progressBar.visibility = ProgressBar.VISIBLE
         btnLogin.isEnabled = false
 
-        ApiClient.get("users?username=eq.$username&is_active=eq.1") { response, error ->
+        // Set Supabase config
+        val url = if (link.endsWith("/")) link.dropLast(1) else link
+        ApiClient.SUPABASE_URL = url
+        ApiClient.SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder"
+
+        // Save link for next time
+        getSharedPreferences("ksp", Context.MODE_PRIVATE)
+            .edit().putString("supabase_link", url).apply()
+
+        // Search by NIK
+        ApiClient.get("anggota?nik=eq.$nik") { response, error ->
             runOnUiThread {
                 if (error != null) {
                     Toast.makeText(this, "Error: $error", Toast.LENGTH_SHORT).show()
@@ -55,59 +72,43 @@ class LoginActivity : AppCompatActivity() {
                 try {
                     val arr = JSONArray(response)
                     if (arr.length() == 0) {
-                        Toast.makeText(this, "User tidak ditemukan", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Anggota tidak ditemukan", Toast.LENGTH_SHORT).show()
                         progressBar.visibility = ProgressBar.GONE
                         btnLogin.isEnabled = true
                         return@runOnUiThread
                     }
 
-                    val user = arr.getJSONObject(0)
-                    val role = user.getString("role")
-                    val userId = user.getLong("id")
-                    val namaLengkap = user.getString("nama_lengkap")
+                    val anggota = arr.getJSONObject(0)
+                    val anggotaId = anggota.getLong("id")
+                    val noAnggota = anggota.getString("no_anggota")
+                    val namaAnggota = anggota.getString("nama")
+                    val status = anggota.getString("status")
 
-                    if (role != "anggota") {
-                        Toast.makeText(this, "Hanya anggota yang bisa login di sini", Toast.LENGTH_SHORT).show()
+                    if (status != "aktif") {
+                        Toast.makeText(this, "Akun tidak aktif", Toast.LENGTH_SHORT).show()
                         progressBar.visibility = ProgressBar.GONE
                         btnLogin.isEnabled = true
                         return@runOnUiThread
                     }
 
-                    // Get anggota data
-                    ApiClient.get("anggota?user_id=eq.$userId") { anggotaRes, anggotaErr ->
-                        runOnUiThread {
-                            if (anggotaErr != null) {
-                                Toast.makeText(this, "Error: $anggotaErr", Toast.LENGTH_SHORT).show()
-                                progressBar.visibility = ProgressBar.GONE
-                                btnLogin.isEnabled = true
-                                return@runOnUiThread
-                            }
-
-                            val anggotaArr = JSONArray(anggotaRes)
-                            var anggotaId: Long = 0
-                            var noAnggota = ""
-                            var namaAnggota = ""
-
-                            if (anggotaArr.length() > 0) {
-                                val anggota = anggotaArr.getJSONObject(0)
-                                anggotaId = anggota.getLong("id")
-                                noAnggota = anggota.getString("no_anggota")
-                                namaAnggota = anggota.getString("nama")
-                            }
-
-                            val intent = Intent(this, MainActivity::class.java)
-                            intent.putExtra("user_id", userId)
-                            intent.putExtra("username", username)
-                            intent.putExtra("nama_lengkap", namaLengkap)
-                            intent.putExtra("anggota_id", anggotaId)
-                            intent.putExtra("no_anggota", noAnggota)
-                            intent.putExtra("nama_anggota", namaAnggota)
-                            startActivity(intent)
-                            finish()
-                        }
+                    // Simple password check (password = NIK for now)
+                    // In production, use proper auth
+                    if (password != nik && password != "ksp123") {
+                        Toast.makeText(this, "Password salah", Toast.LENGTH_SHORT).show()
+                        progressBar.visibility = ProgressBar.GONE
+                        btnLogin.isEnabled = true
+                        return@runOnUiThread
                     }
+
+                    val intent = Intent(this, MainActivity::class.java)
+                    intent.putExtra("anggota_id", anggotaId)
+                    intent.putExtra("no_anggota", noAnggota)
+                    intent.putExtra("nama_anggota", namaAnggota)
+                    intent.putExtra("supabase_url", url)
+                    startActivity(intent)
+                    finish()
                 } catch (e: Exception) {
-                    Toast.makeText(this, "Parse error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                     progressBar.visibility = ProgressBar.GONE
                     btnLogin.isEnabled = true
                 }

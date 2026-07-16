@@ -96,31 +96,34 @@ APK jadi di: `app/build/outputs/apk/debug/app-debug.apk`
 3. Kalau muncul peringatan "Install dari sumber tidak dikenal", klik **"Izinkan"**
 4. Tunggu instalasi selesai
 5. Buka aplikasi **KSP Simpan Pinjam**
-6. Login pakai akun anggota
+
+### Langkah 7: Login di HP
+
+Saat pertama kali buka app, anggota akan melihat 3 field:
+
+| Field | Isi | Keterangan |
+|-------|-----|------------|
+| **Link Supabase** | `https://xxxxx.supabase.co` | Link dari admin |
+| **NIK** | 16 digit NIK | NIK anggota |
+| **Password** | `ksp123` | Default password |
+
+**Link Supabase** akan otomatis tersimpan, jadi login berikutnya tinggal isi NIK & Password.
 
 ---
 
-## Buat Akun Anggota (untuk Login di HP)
+## Cara Login Anggota di HP
 
-Akun anggota harus dibuat dari **Desktop App** (oleh Admin/Teller):
+Anggota login dengan cara:
+1. Buka app **KSP Simpan Pinjam**
+2. Masukkan **Link Supabase** (dari admin): `https://xxxxx.supabase.co`
+3. Masukkan **NIK** (16 digit)
+4. Masukkan **Password**: `ksp123` (default)
+5. Klik **Masuk**
 
-1. Buka Desktop App
-2. Login sebagai **Admin**
-3. Buka menu **Pengaturan** → **User Management**
-4. Klik **"Tambah User"**
-5. Isi:
-   - Username: `anggota3` (bebas)
-   - Password: `anggota123` (bebas, min 6 karakter)
-   - Nama Lengkap: nama anggota
-   - Role: **Anggota**
-6. Klik **Simpan**
-7. Login di HP pakai username & password tadi
-
-**Catatan:** Setelah login di HP, anggota bisa melihat:
-- Saldo simpanan (pokok, wajib, sukarela)
-- Detail pinjaman aktif
-- Riwayat transaksi
-- Profil diri
+**Catatan:**
+- Link Supabase hanya perlu dimasukkan sekali saja, akan tersimpan otomatis
+- Password default adalah `ksp123`
+- Anggota hanya bisa melihat data sendiri
 
 ---
 
