@@ -44,14 +44,6 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.cardview:cardview:1.0.0")
 
-    // Supabase
-    implementation("io.github.jan-tennert.supabase:supabase-kt:2.1.0")
-    implementation("io.github.jan-tennert.supabase:gotrue-kt:2.1.0")
-    implementation("io.github.jan-tennert.supabase:postgrest-kt:2.1.0")
-
-    // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-
-    // Image loading
-    implementation("io.coil-kt:coil:2.5.0")
+    // OkHttp
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

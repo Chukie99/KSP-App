@@ -5,13 +5,9 @@ import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.cardview.widget.CardView
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.query.eq
-import kotlinx.coroutines.launch
+import org.json.JSONArray
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -31,17 +27,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
 
     private var anggotaId: Long = 0
-    private var userId: Long = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        userId = intent.getLongExtra("user_id", 0)
         anggotaId = intent.getLongExtra("anggota_id", 0)
-        val namaLengkap = intent.getStringExtra("nama_lengkap") ?: ""
-        val noAnggota = intent.getStringExtra("no_anggota") ?: ""
         val namaAnggota = intent.getStringExtra("nama_anggota") ?: ""
+        val noAnggota = intent.getStringExtra("no_anggota") ?: ""
 
         tvWelcome = findViewById(R.id.tvWelcome)
         tvMemberNo = findViewById(R.id.tvMemberNo)
@@ -59,9 +52,7 @@ class MainActivity : AppCompatActivity() {
         tvWelcome.text = namaAnggota
         tvMemberNo.text = noAnggota
 
-        tvLogout.setOnClickListener {
-            finish()
-        }
+        tvLogout.setOnClickListener { finish() }
 
         rvRiwayat.layoutManager = LinearLayoutManager(this)
 
@@ -71,67 +62,83 @@ class MainActivity : AppCompatActivity() {
     private fun loadData() {
         progressBar.visibility = View.VISIBLE
 
-        lifecycleScope.launch {
-            try {
-                // Load simpanan
-                val simpananList = SupabaseClient.client.from("simpanan")
-                    .select {
-                        eq("anggota_id", anggotaId)
-                    }
-                    .decodeList<Simpanan>()
-
+        // Load simpanan
+        ApiClient.get("simpanan?anggota_id=eq.$anggotaId&order=created_at.desc") { simpananRes, simpananErr ->
+            runOnUiThread {
                 var totalSimpanan = 0.0
                 var pokok = 0.0
                 var wajib = 0.0
                 var sukarela = 0.0
+                val riwayatList = mutableListOf<SimpananItem>()
 
-                simpananList.forEach { s ->
-                    totalSimpanan += s.nominal
-                    when (s.jenis) {
-                        "pokok" -> pokok += s.nominal
-                        "wajib" -> wajib += s.nominal
-                        "sukarela" -> sukarela += s.nominal
-                    }
+                if (simpananRes != null && simpananErr == null) {
+                    try {
+                        val arr = JSONArray(simpananRes)
+                        for (i in 0 until arr.length()) {
+                            val item = arr.getJSONObject(i)
+                            val nominal = item.getDouble("nominal")
+                            val jenis = item.getString("jenis")
+                            totalSimpanan += nominal
+                            when (jenis) {
+                                "pokok" -> pokok += nominal
+                                "wajib" -> wajib += nominal
+                                "sukarela" -> sukarela += nominal
+                            }
+                            riwayatList.add(SimpananItem(
+                                jenis = jenis,
+                                nominal = nominal,
+                                created_at = item.getString("created_at")
+                            ))
+                        }
+                    } catch (e: Exception) {}
                 }
 
                 // Load pinjaman
-                val pinjamanList = SupabaseClient.client.from("pinjaman")
-                    .select {
-                        eq("anggota_id", anggotaId)
+                ApiClient.get("pinjaman?anggota_id=eq.$anggotaId") { pinjamanRes, pinjamanErr ->
+                    runOnUiThread {
+                        var pinjamanAktif = 0
+                        var totalSisa = 0.0
+
+                        if (pinjamanRes != null && pinjamanErr == null) {
+                            try {
+                                val arr = JSONArray(pinjamanRes)
+                                for (i in 0 until arr.length()) {
+                                    val item = arr.getJSONObject(i)
+                                    if (item.getString("status") == "aktif") {
+                                        pinjamanAktif++
+                                        totalSisa += item.getDouble("sisa_pinjaman")
+                                    }
+                                }
+                            } catch (e: Exception) {}
+                        }
+
+                        val format = NumberFormat.getCurrencyInstance(Locale("id", "ID"))
+                        tvTotalSimpanan.text = format.format(totalSimpanan)
+                        tvSimpananPokok.text = format.format(pokok)
+                        tvSimpananWajib.text = format.format(wajib)
+                        tvSimpananSukarela.text = format.format(sukarela)
+                        tvPinjamanAktif.text = "$pinjamanAktif pinjaman"
+                        tvTotalPinjaman.text = format.format(totalSisa)
+
+                        if (riwayatList.isEmpty()) {
+                            tvEmptyRiwayat.visibility = View.VISIBLE
+                            rvRiwayat.visibility = View.GONE
+                        } else {
+                            tvEmptyRiwayat.visibility = View.GONE
+                            rvRiwayat.visibility = View.VISIBLE
+                            rvRiwayat.adapter = RiwayatAdapter(riwayatList)
+                        }
+
+                        progressBar.visibility = View.GONE
                     }
-                    .decodeList<Pinjaman>()
-
-                val pinjamanAktif = pinjamanList.filter { it.status == "aktif" }
-                val totalSisa = pinjamanAktif.sumOf { it.sisa_pinjaman }
-
-                runOnUiThread {
-                    val format = NumberFormat.getCurrencyInstance(Locale("id", "ID"))
-                    tvTotalSimpanan.text = format.format(totalSimpanan)
-                    tvSimpananPokok.text = format.format(pokok)
-                    tvSimpananWajib.text = format.format(wajib)
-                    tvSimpananSukarela.text = format.format(sukarela)
-                    tvPinjamanAktif.text = "${pinjamanAktif.size} pinjaman"
-                    tvTotalPinjaman.text = format.format(totalSisa)
-
-                    // Setup riwayat adapter
-                    val riwayatAdapter = RiwayatAdapter(simpananList.sortedByDescending { it.created_at })
-                    rvRiwayat.adapter = riwayatAdapter
-
-                    if (simpananList.isEmpty()) {
-                        tvEmptyRiwayat.visibility = View.VISIBLE
-                        rvRiwayat.visibility = View.GONE
-                    } else {
-                        tvEmptyRiwayat.visibility = View.GONE
-                        rvRiwayat.visibility = View.VISIBLE
-                    }
-
-                    progressBar.visibility = View.GONE
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    progressBar.visibility = View.GONE
                 }
             }
         }
     }
 }
+
+data class SimpananItem(
+    val jenis: String,
+    val nominal: Double,
+    val created_at: String
+)

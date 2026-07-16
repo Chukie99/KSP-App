@@ -5,14 +5,10 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
-import io.github.jan.supabase.gotrue.gotrue
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.query.eq
-import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
 class LoginActivity : AppCompatActivity() {
 
@@ -47,70 +43,71 @@ class LoginActivity : AppCompatActivity() {
         progressBar.visibility = ProgressBar.VISIBLE
         btnLogin.isEnabled = false
 
-        lifecycleScope.launch {
-            try {
-                // Cari user berdasarkan username
-                val users = SupabaseClient.client.from("users")
-                    .select {
-                        eq("username", username)
-                    }
-                    .decodeList<User>()
+        ApiClient.get("users?username=eq.$username&is_active=eq.1") { response, error ->
+            runOnUiThread {
+                if (error != null) {
+                    Toast.makeText(this, "Error: $error", Toast.LENGTH_SHORT).show()
+                    progressBar.visibility = ProgressBar.GONE
+                    btnLogin.isEnabled = true
+                    return@runOnUiThread
+                }
 
-                val user = users.firstOrNull()
-                if (user == null) {
-                    runOnUiThread {
-                        Toast.makeText(this@LoginActivity, "User tidak ditemukan", Toast.LENGTH_SHORT).show()
+                try {
+                    val arr = JSONArray(response)
+                    if (arr.length() == 0) {
+                        Toast.makeText(this, "User tidak ditemukan", Toast.LENGTH_SHORT).show()
                         progressBar.visibility = ProgressBar.GONE
                         btnLogin.isEnabled = true
+                        return@runOnUiThread
                     }
-                    return@launch
-                }
 
-                if (user.is_active != 1L) {
-                    runOnUiThread {
-                        Toast.makeText(this@LoginActivity, "Akun tidak aktif", Toast.LENGTH_SHORT).show()
+                    val user = arr.getJSONObject(0)
+                    val role = user.getString("role")
+                    val userId = user.getLong("id")
+                    val namaLengkap = user.getString("nama_lengkap")
+
+                    if (role != "anggota") {
+                        Toast.makeText(this, "Hanya anggota yang bisa login di sini", Toast.LENGTH_SHORT).show()
                         progressBar.visibility = ProgressBar.GONE
                         btnLogin.isEnabled = true
+                        return@runOnUiThread
                     }
-                    return@launch
-                }
 
-                if (user.role != "anggota") {
-                    runOnUiThread {
-                        Toast.makeText(this@LoginActivity, "Hanya anggota yang bisa login di sini", Toast.LENGTH_SHORT).show()
-                        progressBar.visibility = ProgressBar.GONE
-                        btnLogin.isEnabled = true
+                    // Get anggota data
+                    ApiClient.get("anggota?user_id=eq.$userId") { anggotaRes, anggotaErr ->
+                        runOnUiThread {
+                            if (anggotaErr != null) {
+                                Toast.makeText(this, "Error: $anggotaErr", Toast.LENGTH_SHORT).show()
+                                progressBar.visibility = ProgressBar.GONE
+                                btnLogin.isEnabled = true
+                                return@runOnUiThread
+                            }
+
+                            val anggotaArr = JSONArray(anggotaRes)
+                            var anggotaId: Long = 0
+                            var noAnggota = ""
+                            var namaAnggota = ""
+
+                            if (anggotaArr.length() > 0) {
+                                val anggota = anggotaArr.getJSONObject(0)
+                                anggotaId = anggota.getLong("id")
+                                noAnggota = anggota.getString("no_anggota")
+                                namaAnggota = anggota.getString("nama")
+                            }
+
+                            val intent = Intent(this, MainActivity::class.java)
+                            intent.putExtra("user_id", userId)
+                            intent.putExtra("username", username)
+                            intent.putExtra("nama_lengkap", namaLengkap)
+                            intent.putExtra("anggota_id", anggotaId)
+                            intent.putExtra("no_anggota", noAnggota)
+                            intent.putExtra("nama_anggota", namaAnggota)
+                            startActivity(intent)
+                            finish()
+                        }
                     }
-                    return@launch
-                }
-
-                // Login dengan email (username@ksp.local)
-                val email = "$username@ksp.local"
-                SupabaseClient.client.gotrue.loginWith(email, password)
-
-                // Get anggota data
-                val anggotaList = SupabaseClient.client.from("anggota")
-                    .select {
-                        eq("user_id", user.id)
-                    }
-                    .decodeList<Anggota>()
-
-                val anggota = anggotaList.firstOrNull()
-
-                runOnUiThread {
-                    val intent = Intent(this@LoginActivity, MainActivity::class.java)
-                    intent.putExtra("user_id", user.id)
-                    intent.putExtra("username", user.username)
-                    intent.putExtra("nama_lengkap", user.nama_lengkap)
-                    intent.putExtra("anggota_id", anggota?.id)
-                    intent.putExtra("no_anggota", anggota?.no_anggota)
-                    intent.putExtra("nama_anggota", anggota?.nama)
-                    startActivity(intent)
-                    finish()
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    Toast.makeText(this@LoginActivity, "Login gagal: ${e.message}", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Parse error: ${e.message}", Toast.LENGTH_SHORT).show()
                     progressBar.visibility = ProgressBar.GONE
                     btnLogin.isEnabled = true
                 }

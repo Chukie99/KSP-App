@@ -5,11 +5,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class RiwayatAdapter(private val items: List<Simpanan>) : RecyclerView.Adapter<RiwayatAdapter.ViewHolder>() {
+class RiwayatAdapter(private val items: List<SimpananItem>) : RecyclerView.Adapter<RiwayatAdapter.ViewHolder>() {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val tvJenis: TextView = view.findViewById(R.id.tvJenis)
@@ -48,7 +47,6 @@ class RiwayatAdapter(private val items: List<Simpanan>) : RecyclerView.Adapter<R
     override fun getItemCount() = items.size
 
     private fun Long.toLocaleString(): String {
-        val format = NumberFormat.getNumberInstance(Locale("id", "ID"))
-        return format.format(this)
+        return java.text.NumberFormat.getNumberInstance(Locale("id", "ID")).format(this)
     }
 }
