@@ -1,76 +1,126 @@
 # Koperasi Simpan Pinjam
 
-Aplikasi desktop Koperasi Simpan Pinjam berbasis Electron + React + Tailwind CSS dengan SQLite portable.
+Aplikasi lengkap Koperasi Simpan Pinjam: Desktop untuk Admin/Teller, Mobile untuk Anggota.
 
-## Teknologi
+## Download
 
-- **Frontend**: React 18 + TypeScript + Tailwind CSS + Recharts
-- **Backend**: Electron + vite-plugin-electron + sql.js (SQLite pure-JS)
-- **Database**: SQLite (portable, tersimpan di folder aplikasi)
-- **UI**: Windows 11 Fluent Design (Acrylic, Rounded Corner, Shadow)
+| Platform | Link Download | Untuk |
+|----------|---------------|-------|
+| **Windows (.exe)** | [Download Desktop App](https://github.com/Chukie99/KSP-App/releases) | Admin & Teller |
+| **Android (.apk)** | [Download Android App](https://github.com/Chukie99/KSP-App/releases) | Anggota |
+| **iPhone (.ipa)** | [Download iOS App](https://github.com/Chukie99/KSP-App/releases) | Anggota |
 
-## Fitur
+## Arsitektur
 
-- **Manajemen Anggota**: CRUD anggota dengan nomor otomatis KSP-001
-- **Simpanan**: Pokok, Wajib, Sukarela dengan mutasi lengkap
-- **Pinjaman**: Pengajuan, persetujuan, angsuran dengan denda keterlambatan
-- **Transaksi**: Riwayat lengkap semua transaksi
-- **Dashboard**: Grafik keuangan bulanan (Admin), saldo anggota
-- **Laporan**: Export ke Excel (XLSX)
-- **Pengaturan**: Konfigurasi simpanan, bunga, denda
-- **Autentikasi**: 3 role (Admin, Teller, Anggota)
+```
+┌─────────────────────┐
+│  DESKTOP (Admin)    │──── SQLite ──→ sync ──→ SUPABASE
+│  Electron + React   │                                │
+└─────────────────────┘                                │
+                                                       │
+┌─────────────────────┐         baca dari ──────────────┘
+│  ANDROID (Anggota)  │←────────────────────────────────┘
+│  React Native       │
+└─────────────────────┘
 
-## Akun Demo
+┌─────────────────────┐         baca dari ──────────────┘
+│  iPHONE (Anggota)   │←────────────────────────────────┘
+│  React Native       │
+└─────────────────────┘
+```
 
-| Role     | Username  | Password   |
-|----------|-----------|------------|
-| Admin    | admin     | admin123   |
-| Admin    | admin2    | admin123   |
-| Teller   | teller1   | teller123  |
-| Teller   | teller2   | teller123  |
-| Anggota  | anggota1  | anggota123 |
-| Anggota  | anggota2  | anggota123 |
+## Folder Struktur
 
-## Cara Menjalankan (Development)
+```
+KSP-App/
+├── src/                    # Desktop App (Admin/Teller)
+│   ├── main/              # Electron main process
+│   └── renderer/          # React UI
+├── KSP-Mobile/            # Mobile App (Anggota) - Android & iOS
+│   ├── src/
+│   │   ├── lib/           # Supabase config
+│   │   └── screens/       # All screens
+│   └── package.json
+├── supabase/              # Database schema
+│   └── schema.sql
+└── package.json
+```
+
+## Desktop App (Admin/Teller)
+
+### Teknologi
+- React 18 + TypeScript + Tailwind CSS
+- Electron + SQLite (sql.js)
+- UI: Windows 11 Fluent Design
+
+### Fitur
+- Manajemen Anggota (CRUD)
+- Simpanan (Pokok, Wajib, Sukarela)
+- Pinjaman (Pengajuan, Angsuran, Denda)
+- Transaksi & Riwayat
+- Dashboard & Laporan
+- Export ke Excel
+- Backup & Restore Database
+- 3 Role: Admin, Teller, Anggota
+
+### Build Desktop App
 
 ```bash
-# Install dependencies
 npm install
-
-# Jalankan development mode
-npm run dev
-
-# Jalankan dengan Electron (setelah dev server start)
-npm start
+npm run build:win
 ```
 
-## Build Portable .exe (Windows)
+File `.exe` tersimpan di folder `build/`.
+
+## Mobile App (Anggota)
+
+### Teknologi
+- React Native + Expo
+- Supabase (PostgreSQL)
+- React Navigation
+
+### Fitur
+- Login dengan akun anggota
+- Dashboard saldo simpanan
+- Lihat detail simpanan (pokok, wajib, sukarela)
+- Lihat detail pinjaman & progress
+- Riwayat transaksi
+- Profil anggota
+
+### Build Mobile App
 
 ```bash
-# Build aplikasi
-npm run electron:build
+cd KSP-Mobile
+npm install
+eas build -p android --profile preview   # Android
+eas build -p ios --profile preview       # iOS
 ```
 
-File `.exe` portable akan tersimpan di folder `dist-electron-out/`. Aplikasi bisa dijalankan langsung tanpa installer.
+## Setup Supabase
 
-## Struktur Database
+1. Buat akun di [supabase.com](https://supabase.com)
+2. Buat project baru
+3. Jalankan `supabase/schema.sql` di SQL Editor
+4. Copy URL & Anon Key ke `KSP-Mobile/src/lib/supabase.ts`
+5. Set environment variable untuk sync:
+   ```
+   SUPABASE_URL=https://xxx.supabase.co
+   SUPABASE_ANON_KEY=eyJxxx...
+   ```
 
-Database SQLite (`koperasi.db`) otomatis dibuat dengan struktur:
+## Akun Demo (Desktop)
 
-- `users` - Pengguna sistem (Admin, Teller, Anggota)
-- `members` - Data anggota koperasi
-- `settings` - Pengaturan sistem
-- `savings` - Saldo simpanan per anggota
-- `savings_transactions` - Mutasi simpanan
-- `loans` - Data pinjaman
-- `loan_payments` - Jadwal angsuran
-- `transactions` - Log semua transaksi
+| Role | Username | Password |
+|------|----------|----------|
+| Admin | admin | admin123 |
+| Teller | teller1 | teller123 |
+| Anggota | anggota1 | anggota123 |
 
 ## Konfigurasi Default
 
 | Setting | Default | Deskripsi |
 |---------|---------|-----------|
-| Simpanan Pokok | Rp100.000 | Dibayarkan sekali |
-| Simpanan Wajib | Rp50.000/bulan | Setoran wajib bulanan |
+| Simpanan Pokok | Rp100.000 | Sekali bayar |
+| Simpanan Wajib | Rp50.000/bulan | Wajib setoran |
 | Bunga Pinjaman | 12%/tahun | Flat |
 | Denda Keterlambatan | 0.5%/hari | Dari pokok angsuran |
