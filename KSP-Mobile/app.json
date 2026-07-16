@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "KSP Simpan Pinjam",
+    "slug": "ksp-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "ksp-mobile",
+    "userInterfaceStyle": "automatic",
+    "extra": {
+      "eas": {
+        "projectId": "994e7124-e8f4-49c8-a8a4-c3d4d501c895"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.chukie99.kspmobile",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.chukie99.kspmobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#0078D4"
+      }
+    },
+    "web": {
+      "favicon": "./assets/icon.png"
+    }
+  }
+}

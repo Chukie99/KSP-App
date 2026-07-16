@@ -2,7 +2,6 @@
   "cli": {
     "version": ">= 3.0.0"
   },
-  "project": "994e7124-e8f4-49c8-a8a4-c3d4d501c895",
   "build": {
     "preview": {
       "android": {
