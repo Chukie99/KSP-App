@@ -85,6 +85,7 @@ declare global {
   interface Window {
     api: {
       window: { minimize: () => void; maximize: () => void; close: () => void }
+      supabase: { connect: (url: string, key: string) => Promise<any>; check: () => Promise<any> }
       auth: {
         login: (username: string, password: string) => Promise<any>
         logout: () => Promise<any>
@@ -101,7 +102,6 @@ declare global {
         transaksi: (from: string, to: string) => Promise<any>
         perAnggota: (anggotaId: number) => Promise<any>
       }
-      backup: { database: () => Promise<any>; restore: () => Promise<any> }
       export: { save: (content: string, name: string) => Promise<any> }
     }
   }

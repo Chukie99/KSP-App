@@ -6,6 +6,10 @@ contextBridge.exposeInMainWorld('api', {
     maximize: () => ipcRenderer.send('window:maximize'),
     close: () => ipcRenderer.send('window:close'),
   },
+  supabase: {
+    connect: (url: string, key: string) => ipcRenderer.invoke('supabase:connect', url, key),
+    check: () => ipcRenderer.invoke('supabase:check'),
+  },
   auth: {
     login: (username: string, password: string) => ipcRenderer.invoke('auth:login', username, password),
     logout: () => ipcRenderer.invoke('auth:logout'),
