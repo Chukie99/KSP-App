@@ -25,6 +25,12 @@ jobs:
         working-directory: KSP-Mobile
         run: npm install
 
+      - name: Configure EAS
+        working-directory: KSP-Mobile
+        run: eas init --id 994e7124-e8f4-49c8-a8a4-c3d4d501c895
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
       - name: Build APK
         working-directory: KSP-Mobile
         env:
@@ -47,6 +53,12 @@ jobs:
       - name: Install dependencies
         working-directory: KSP-Mobile
         run: npm install
+
+      - name: Configure EAS
+        working-directory: KSP-Mobile
+        run: eas init --id 994e7124-e8f4-49c8-a8a4-c3d4d501c895
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Build IPA
         working-directory: KSP-Mobile
