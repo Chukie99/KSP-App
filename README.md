@@ -96,6 +96,16 @@ eas build -p android --profile preview   # Android
 eas build -p ios --profile preview       # iOS
 ```
 
+## Build Android Native (Kotlin)
+
+```bash
+cd KSP-Mobile-Android
+# Buka project di Android Studio
+# Build → Generate Signed Bundle/APK → APK
+```
+
+File `.apk` tersimpan di folder `app/build/outputs/apk/debug/`.
+
 ## Setup Supabase
 
 1. Buat akun di [supabase.com](https://supabase.com)
