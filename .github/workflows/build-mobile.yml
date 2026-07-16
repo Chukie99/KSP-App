@@ -1,0 +1,55 @@
+name: Build Mobile App (Android & iOS)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'KSP-Mobile/**'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Setup EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Install dependencies
+        working-directory: KSP-Mobile
+        run: npm install
+
+      - name: Build APK
+        working-directory: KSP-Mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build -p android --profile preview --non-interactive
+
+  build-ios:
+    name: Build iOS IPA
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Setup EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Install dependencies
+        working-directory: KSP-Mobile
+        run: npm install
+
+      - name: Build IPA
+        working-directory: KSP-Mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build -p ios --profile preview --non-interactive

@@ -1,0 +1,68 @@
+name: Release All Platforms
+
+on:
+  workflow_run:
+    workflows: ["Build Mobile App (Android & iOS)", "Build Desktop App (Windows .exe)"]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Android artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: build-mobile.yml
+          name: build-android
+          path: ./artifacts/android
+
+      - name: Download iOS artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: build-mobile.yml
+          name: build-ios
+          path: ./artifacts/ios
+
+      - name: Download Desktop artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: build-desktop.yml
+          name: build-windows
+          path: ./artifacts/windows
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "KSP Simpan Pinjam v${{ github.run_number }}"
+          body: |
+            ## Download
+
+            ### Desktop (Admin/Teller)
+            - Windows (.exe)
+
+            ### Mobile (Anggota)
+            - Android (.apk)
+            - iPhone (.ipa)
+
+            ## Arsitektur
+            - Desktop: Electron + React + SQLite
+            - Mobile: React Native + Expo + Supabase
+            - Database: Supabase (PostgreSQL)
+
+            ## Akun Demo
+            - Admin: admin / admin123
+            - Teller: teller1 / teller123
+            - Anggota: anggota1 / anggota123
+          files: |
+            artifacts/android/*
+            artifacts/ios/*
+            artifacts/windows/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
