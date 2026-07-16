@@ -5,18 +5,24 @@ import bcrypt from 'bcryptjs'
 import fs from 'fs'
 
 const isDev = !app.isPackaged
-const dbDir = isDev ? path.join(__dirname, '../../data') : path.join(process.resourcesPath, 'data')
-if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true })
-const dbPath = path.join(dbDir, 'koperasi.db')
 
 let db: Database
 
-// Role-based access control
-let currentUserId: number | null = null
-let currentUserRole: string | null = null
+// Per-sender session tracking to prevent race conditions
+const sessions = new Map<string, { userId: number; role: string }>()
 
-function isAdmin(): boolean { return currentUserRole === 'admin' }
-function isTellerOrAdmin(): boolean { return currentUserRole === 'admin' || currentUserRole === 'teller' }
+function getSession(senderId: string): { userId: number; role: string } | null {
+  return sessions.get(senderId) || null
+}
+
+function isAdmin(senderId: string): boolean {
+  return getSession(senderId)?.role === 'admin'
+}
+
+function isTellerOrAdmin(senderId: string): boolean {
+  const role = getSession(senderId)?.role
+  return role === 'admin' || role === 'teller'
+}
 
 function getWasmPath(): string {
   if (isDev) return path.join(__dirname, 'sql-wasm.wasm')
@@ -117,6 +123,15 @@ async function initDatabase() {
     created_at TEXT DEFAULT (datetime('now'))
   )`)
 
+  // Indexes for better query performance
+  db.run('CREATE INDEX IF NOT EXISTS idx_simpanan_anggota ON simpanan(anggota_id)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_simpanan_jenis ON simpanan(jenis)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_pinjaman_anggota ON pinjaman(anggota_id)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_pinjaman_status ON pinjaman(status)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_pembayaran_anggota ON pembayaran(anggota_id)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_pembayaran_pinjaman ON pembayaran(pinjaman_id)')
+  db.run('CREATE INDEX IF NOT EXISTS idx_pembayaran_jenis ON pembayaran(jenis)')
+
   const adminCheck = db.exec("SELECT COUNT(*) as c FROM users WHERE role = 'admin'")
   if ((adminCheck[0]?.values[0]?.[0] as number) === 0) {
     const hash = bcrypt.hashSync('admin123', 10)
@@ -192,6 +207,11 @@ function startMacetScheduler() {
   }, ms)
 }
 
+// Also check overdue on every IPC call that touches pinjaman
+function checkOverdueOnDemand() {
+  checkOverdueLoans()
+}
+
 let mainWindow: BrowserWindow | null = null
 
 function createWindow() {
@@ -236,14 +256,14 @@ ipcMain.on('window:maximize', () => { if (mainWindow?.isMaximized()) mainWindow.
 ipcMain.on('window:close', () => mainWindow?.close())
 
 // Auth
-ipcMain.handle('auth:login', (_e, username: string, password: string) => {
+ipcMain.handle('auth:login', (e, username: string, password: string) => {
   try {
     if (!db) return { error: 'Database belum siap' }
     const user = queryOne('SELECT * FROM users WHERE username = ? AND is_active = 1', [username])
     if (!user) return { error: 'User tidak ditemukan' }
     if (!bcrypt.compareSync(password, user.password)) return { error: 'Password salah' }
-    currentUserId = user.id
-    currentUserRole = user.role
+    const senderId = e.sender.id
+    sessions.set(senderId, { userId: user.id, role: user.role })
     let anggota: any = null
     if (user.role === 'anggota') anggota = queryOne('SELECT * FROM anggota WHERE user_id = ?', [user.id])
     return { user: { id: user.id, username: user.username, role: user.role, nama_lengkap: user.nama_lengkap }, anggota }
@@ -253,10 +273,12 @@ ipcMain.handle('auth:login', (_e, username: string, password: string) => {
   }
 })
 
-ipcMain.handle('auth:logout', () => { currentUserId = null; currentUserRole = null; return { success: true } })
+ipcMain.handle('auth:logout', (e) => { sessions.delete(e.sender.id); return { success: true } })
 
-ipcMain.handle('auth:change-password', (_e, userId: number, oldPassword: string, newPassword: string) => {
+ipcMain.handle('auth:change-password', (e, userId: number, oldPassword: string, newPassword: string) => {
   try {
+    const session = getSession(e.sender.id)
+    if (!session) return { error: 'Sesi tidak valid' }
     const user = queryOne('SELECT * FROM users WHERE id=?', [userId])
     if (!user) return { error: 'User tidak ditemukan' }
     if (!bcrypt.compareSync(oldPassword, user.password)) return { error: 'Password lama salah' }
@@ -269,23 +291,24 @@ ipcMain.handle('auth:change-password', (_e, userId: number, oldPassword: string,
 })
 
 // Users
-ipcMain.handle('users:list', () => { if (!isAdmin()) return { error: 'Akses ditolak' }; return queryAll('SELECT id, username, role, nama_lengkap, is_active, created_at FROM users') })
-ipcMain.handle('users:create', (_e, data: any) => {
-  if (!isAdmin()) return { error: 'Hanya admin yang bisa membuat user' }
+ipcMain.handle('users:list', (e) => { if (!isAdmin(e.sender.id)) return { error: 'Akses ditolak' }; return queryAll('SELECT id, username, role, nama_lengkap, is_active, created_at FROM users') })
+ipcMain.handle('users:create', (e, data: any) => {
+  if (!isAdmin(e.sender.id)) return { error: 'Hanya admin yang bisa membuat user' }
   try { const h = bcrypt.hashSync(data.password, 10); runSql('INSERT INTO users (username, password, role, nama_lengkap) VALUES (?, ?, ?, ?)', [data.username, h, data.role, data.nama_lengkap]); return { success: true } }
   catch (err: any) { return { error: err.message } }
 })
-ipcMain.handle('users:update', (_e, id: number, data: any) => {
-  if (!isAdmin()) return { error: 'Hanya admin yang bisa mengubah user' }
+ipcMain.handle('users:update', (e, id: number, data: any) => {
+  if (!isAdmin(e.sender.id)) return { error: 'Hanya admin yang bisa mengubah user' }
   try {
     if (data.password) { const h = bcrypt.hashSync(data.password, 10); db.run('UPDATE users SET nama_lengkap=?, role=?, is_active=?, password=?, updated_at=datetime("now") WHERE id=?', [data.nama_lengkap, data.role, data.is_active ? 1 : 0, h, id]) }
     else db.run('UPDATE users SET nama_lengkap=?, role=?, is_active=?, updated_at=datetime("now") WHERE id=?', [data.nama_lengkap, data.role, data.is_active ? 1 : 0, id])
     saveDb(); return { success: true }
   } catch (err: any) { return { error: err.message } }
 })
-ipcMain.handle('users:delete', (_e, id: number) => {
-  if (!isAdmin()) return { error: 'Hanya admin yang bisa menghapus user' }
-  if (id === currentUserId) return { error: 'Tidak bisa menghapus akun sendiri' }
+ipcMain.handle('users:delete', (e, id: number) => {
+  if (!isAdmin(e.sender.id)) return { error: 'Hanya admin yang bisa menghapus user' }
+  const session = getSession(e.sender.id)
+  if (id === session?.userId) return { error: 'Tidak bisa menghapus akun sendiri' }
   try {
     const user = queryOne('SELECT role FROM users WHERE id=?', [id])
     if (user?.role === 'admin') {
@@ -299,29 +322,28 @@ ipcMain.handle('users:delete', (_e, id: number) => {
 // Anggota
 ipcMain.handle('anggota:list', () => queryAll('SELECT a.*, u.username FROM anggota a LEFT JOIN users u ON a.user_id=u.id ORDER BY a.no_anggota'))
 ipcMain.handle('anggota:get', (_e, id: number) => queryOne('SELECT a.*, u.username FROM anggota a LEFT JOIN users u ON a.user_id=u.id WHERE a.id=?', [id]))
-ipcMain.handle('anggota:create', (_e, data: any) => {
-  if (!isTellerOrAdmin()) return { error: 'Akses ditolak' }
+ipcMain.handle('anggota:create', (e, data: any) => {
+  if (!isTellerOrAdmin(e.sender.id)) return { error: 'Akses ditolak' }
   try {
-    const last = queryOne('SELECT no_anggota FROM anggota ORDER BY id DESC LIMIT 1')
-    let nextNum = 1
-    if (last) nextNum = parseInt(last.no_anggota.replace('KSP-', '')) + 1
+    const maxResult = queryOne('SELECT MAX(CAST(SUBSTR(no_anggota, 5) AS INTEGER)) as max_num FROM anggota')
+    const nextNum = (maxResult?.max_num || 0) + 1
     const noAnggota = `KSP-${String(nextNum).padStart(3, '0')}`
     runSql('INSERT INTO anggota (no_anggota, user_id, nama, nik, alamat, telepon, email, tanggal_lahir, pekerjaan, foto) VALUES (?,?,?,?,?,?,?,?,?,?)',
       [noAnggota, data.user_id || null, data.nama, data.nik, data.alamat, data.telepon, data.email, data.tanggal_lahir, data.pekerjaan, data.foto || null])
     return { success: true, no_anggota: noAnggota }
   } catch (err: any) { return { error: err.message } }
 })
-ipcMain.handle('anggota:update', (_e, id: number, data: any) => {
-  if (!isTellerOrAdmin()) return { error: 'Akses ditolak' }
+ipcMain.handle('anggota:update', (e, id: number, data: any) => {
+  if (!isTellerOrAdmin(e.sender.id)) return { error: 'Akses ditolak' }
   try { db.run("UPDATE anggota SET nama=?,nik=?,alamat=?,telepon=?,email=?,tanggal_lahir=?,pekerjaan=?,foto=?,status=?,updated_at=datetime('now') WHERE id=?", [data.nama, data.nik, data.alamat, data.telepon, data.email, data.tanggal_lahir, data.pekerjaan, data.foto, data.status, id]); saveDb(); return { success: true } }
   catch (err: any) { return { error: err.message } }
 })
-ipcMain.handle('anggota:toggle-status', (_e, id: number) => {
-  if (!isTellerOrAdmin()) return { error: 'Akses ditolak' }
+ipcMain.handle('anggota:toggle-status', (e, id: number) => {
+  if (!isTellerOrAdmin(e.sender.id)) return { error: 'Akses ditolak' }
   try { db.run("UPDATE anggota SET status=CASE WHEN status='aktif' THEN 'nonaktif' ELSE 'aktif' END, updated_at=datetime('now') WHERE id=?", [id]); saveDb(); return { success: true } } catch (err: any) { return { error: err.message } }
 })
-ipcMain.handle('anggota:delete', (_e, id: number) => {
-  if (!isAdmin()) return { error: 'Hanya admin yang bisa menghapus anggota' }
+ipcMain.handle('anggota:delete', (e, id: number) => {
+  if (!isAdmin(e.sender.id)) return { error: 'Hanya admin yang bisa menghapus anggota' }
   try {
     const hasSimpanan = queryOne('SELECT COUNT(*) as c FROM simpanan WHERE anggota_id=?', [id])
     const hasPinjaman = queryOne('SELECT COUNT(*) as c FROM pinjaman WHERE anggota_id=?', [id])
@@ -338,8 +360,8 @@ ipcMain.handle('simpanan:list', (_e, anggotaId?: number) => {
   if (anggotaId) return queryAll('SELECT s.*, a.nama, a.no_anggota FROM simpanan s JOIN anggota a ON s.anggota_id=a.id WHERE s.anggota_id=? ORDER BY s.created_at DESC', [anggotaId])
   return queryAll('SELECT s.*, a.nama, a.no_anggota FROM simpanan s JOIN anggota a ON s.anggota_id=a.id ORDER BY s.created_at DESC')
 })
-ipcMain.handle('simpanan:create', (_e, data: any) => {
-  if (!isTellerOrAdmin()) return { error: 'Akses ditolak' }
+ipcMain.handle('simpanan:create', (e, data: any) => {
+  if (!isTellerOrAdmin(e.sender.id)) return { error: 'Akses ditolak' }
   try {
     const anggota = queryOne('SELECT id FROM anggota WHERE id=? AND status="aktif"', [data.anggota_id])
     if (!anggota) return { error: 'Anggota tidak ditemukan atau tidak aktif' }
@@ -361,14 +383,13 @@ ipcMain.handle('simpanan:summary', (_e, anggotaId: number) => {
 
 // Pinjaman
 ipcMain.handle('pinjaman:list', () => queryAll('SELECT p.*, a.nama, a.no_anggota FROM pinjaman p JOIN anggota a ON p.anggota_id=a.id ORDER BY p.created_at DESC'))
-ipcMain.handle('pinjaman:create', (_e, data: any) => {
-  if (!isTellerOrAdmin()) return { error: 'Akses ditolak' }
+ipcMain.handle('pinjaman:create', (e, data: any) => {
+  if (!isTellerOrAdmin(e.sender.id)) return { error: 'Akses ditolak' }
   try {
     const anggota = queryOne('SELECT id FROM anggota WHERE id=? AND status="aktif"', [data.anggota_id])
     if (!anggota) return { error: 'Anggota tidak ditemukan atau tidak aktif' }
-    const last = queryOne('SELECT no_pinjaman FROM pinjaman ORDER BY id DESC LIMIT 1')
-    let nextNum = 1
-    if (last) nextNum = parseInt(last.no_pinjaman.replace('PJ-', '')) + 1
+    const maxResult = queryOne('SELECT MAX(CAST(SUBSTR(no_pinjaman, 4) AS INTEGER)) as max_num FROM pinjaman')
+    const nextNum = (maxResult?.max_num || 0) + 1
     const noPinjaman = `PJ-${String(nextNum).padStart(3, '0')}`
     const bunga = data.jumlah * (data.bunga_persen || 0) / 100
     const totalHutang = data.jumlah + bunga
@@ -389,8 +410,8 @@ ipcMain.handle('pinjaman:detail', (_e, id: number) => {
 
 // Pembayaran
 ipcMain.handle('pembayaran:list', () => queryAll('SELECT p.*, a.nama, a.no_anggota FROM pembayaran p JOIN anggota a ON p.anggota_id=a.id ORDER BY p.created_at DESC'))
-ipcMain.handle('pembayaran:create', (_e, data: any) => {
-  if (!isTellerOrAdmin()) return { error: 'Akses ditolak' }
+ipcMain.handle('pembayaran:create', (e, data: any) => {
+  if (!isTellerOrAdmin(e.sender.id)) return { error: 'Akses ditolak' }
   try {
     const anggota = queryOne('SELECT id FROM anggota WHERE id=? AND status="aktif"', [data.anggota_id])
     if (!anggota) return { error: 'Anggota tidak ditemukan atau tidak aktif' }
@@ -418,13 +439,14 @@ ipcMain.handle('pembayaran:create', (_e, data: any) => {
 
 // Pengaturan
 ipcMain.handle('pengaturan:get', () => { const rows = queryAll('SELECT * FROM pengaturan'); const r: any = {}; rows.forEach((x: any) => { r[x.key] = x.value }); return r })
-ipcMain.handle('pengaturan:update', (_e, key: string, value: string) => {
-  if (!isAdmin()) return { error: 'Hanya admin yang bisa mengubah pengaturan' }
+ipcMain.handle('pengaturan:update', (e, key: string, value: string) => {
+  if (!isAdmin(e.sender.id)) return { error: 'Hanya admin yang bisa mengubah pengaturan' }
   try { db.run('UPDATE pengaturan SET value=? WHERE key=?', [value, key]); saveDb(); return { success: true } } catch (err: any) { return { error: err.message } }
 })
 
 // Dashboard
 ipcMain.handle('dashboard:stats', () => {
+  checkOverdueOnDemand()
   const totalAnggota = queryOne('SELECT COUNT(*) as c FROM anggota WHERE status="aktif"')?.c || 0
   const totalSimpanan = queryOne('SELECT COALESCE(SUM(nominal),0) as t FROM simpanan')?.t || 0
   const pinjamanAktif = queryOne('SELECT COUNT(*) as c FROM pinjaman WHERE status="aktif"')?.c || 0

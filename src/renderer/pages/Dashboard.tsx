@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useAuthStore } from '../store/auth'
 import { formatRupiah } from '../lib/utils'
 import { Users, Wallet, CreditCard, TrendingUp, Activity, AlertTriangle } from 'lucide-react'
@@ -6,7 +6,9 @@ import type { DashboardStats } from '../types'
 export default function Dashboard() {
   const { user } = useAuthStore()
   const [stats, setStats] = useState<DashboardStats>({ totalAnggota: 0, totalSimpanan: 0, pinjamanAktif: 0, totalPinjaman: 0, transaksiHariIni: 0, pinjamanMacet: 0, totalMacet: 0, alerts: [], overdueSoon: [] })
-  useEffect(() => { window.api.dashboard.stats().then(setStats) }, [])
+  const loadStats = useCallback(() => { window.api.dashboard.stats().then(setStats) }, [])
+  useEffect(() => { loadStats() }, [loadStats])
+  useEffect(() => { const interval = setInterval(loadStats, 30000); return () => clearInterval(interval) }, [loadStats])
   const cards = [
     { label: 'Total Anggota', value: String(stats.totalAnggota), icon: Users, bg: '#d0e7ff', fg: '#004e8c' },
     { label: 'Total Simpanan', value: formatRupiah(stats.totalSimpanan), icon: Wallet, bg: '#dff6dd', fg: '#0e7a0d' },

@@ -24,7 +24,7 @@ export default function PembayaranPage() {
     } else {
       setSelectedPinjaman(null)
     }
-  }, [form.pinjaman_id])
+  }, [form.pinjaman_id, anggotaPinjaman])
   const filtered = list.filter(p => !search || p.nama?.toLowerCase().includes(search.toLowerCase()) || p.no_anggota?.toLowerCase().includes(search.toLowerCase()))
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

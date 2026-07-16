@@ -29,6 +29,7 @@ export default function LaporanPage() {
     let csv = 'Tanggal,No Anggota,Nama,Jenis,Nominal,Keterangan\n'
     data.simpanan.forEach((s: any) => { csv += `"${formatDateTime(s.created_at)}","${s.no_anggota}","${s.nama}","Simpanan ${s.jenis}",${s.nominal},"${s.keterangan || ''}"\n` })
     data.pembayaran.forEach((p: any) => { csv += `"${formatDateTime(p.created_at)}","${p.no_anggota}","${p.nama}","${p.jenis === 'angsuran' ? 'Angsuran' : 'Simpanan'}",${p.nominal},"${p.keterangan || ''}"\n` })
+    data.pinjaman.forEach((p: any) => { csv += `"${formatDateTime(p.created_at)}","${p.no_anggota}","${p.nama}","Pinjaman Baru",${p.jumlah},"${p.keterangan || ''}"\n` })
     const result = await window.api.export.save(csv, `laporan-koperasi-${from}-${to}.csv`)
     if (result.success) alert('Export berhasil: ' + result.path)
   }
